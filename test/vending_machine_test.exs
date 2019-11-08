@@ -8,22 +8,30 @@ defmodule VendingMachineTest do
   @quarter %Coin{weight: 5.670}
 
   test "Add invalid coin to Vending machine with $0 displays 'INSERT COIN' and returns invalid coin" do
-    vm = %VendingMachine{}
-    vm = VendingMachine.amount(vm, @invalid)
-    assert vm == %VendingMachine{display: "INSERT COIN", staging: [], coin_return: [@invalid]}
+    oldVm = %VendingMachine{}
+    newVm = VendingMachine.amount(oldVm, @invalid)
+    expected = %{oldVm | coin_return: [@invalid]}
+    assert newVm == expected
   end
 
   test "Add nickel to Vending machine with $0 displays '0.05' and keeps nickel" do
-    vm = %VendingMachine{}
-    vm = VendingMachine.amount(vm, @nickel)
-    assert vm == %VendingMachine{display: "0.05", staging: [@nickel]}
+    oldVm = %VendingMachine{}
+    newVm = VendingMachine.amount(oldVm, @nickel)
+    expected = %{oldVm | display: "0.05", staging: [@nickel]}
+    assert newVm == expected
   end
 
-  # test "Add invalid coin to Vending machine with $0.25 displays '0.25' and returns invalid coin" do
-  #   VendingMachine.amount(0.25, @invalid) == {"0.25", @invalid}
-  # end
+  test "Add invalid coin to Vending machine with $0.25 displays '0.25' and returns invalid coin" do
+    oldVm = %VendingMachine{staging: [@quarter]}
+    newVm = VendingMachine.amount(oldVm, @invalid)
+    expected = %{oldVm | coin_return: [@invalid]}
+    assert newVm == expected
+  end
 
-  # test "Add nickel to Vending machine with $0.25 displays '0.25' and keeps nickel" do
-  #   VendingMachine.amount(0.25, @nickel) == {"0.30", nil}
-  # end
+  test "Add nickel to Vending machine with $0.25 displays '0.30' and keeps nickel" do
+    oldVm = %VendingMachine{staging: [@quarter]}
+    newVm = VendingMachine.amount(oldVm, @nickel)
+    expected = %{oldVm | display: "0.3", staging: [@quarter, @nickel]}
+    assert newVm == expected
+  end
 end
