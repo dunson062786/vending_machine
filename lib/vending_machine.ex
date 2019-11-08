@@ -8,7 +8,9 @@ defmodule VendingMachine do
     {:bank, []},
     {:inventory, nil},
     {:staging, []},
-    {:display, "INSERT COIN"}
+    {:display, "INSERT COIN"},
+    {:bin, []},
+    {:grid, %{cola: false, chips: false, candy: false}}
   ]
 
   @spec amount(%VendingMachine{}, %Coin{}) :: %VendingMachine{}
@@ -34,6 +36,22 @@ defmodule VendingMachine do
         else
           %{vending_machine | coin_return: coin_return}
         end
+    end
+  end
+
+  def select(vending_machine, name) do
+    case name do
+      "cola" ->
+        cola = vending_machine.grid.cola
+        %{vending_machine | grid: %{%VendingMachine{}.grid | cola: !cola}}
+
+      "chips" ->
+        chips = vending_machine.grid.chips
+        %{vending_machine | grid: %{%VendingMachine{}.grid | chips: !chips}}
+
+      "candy" ->
+        candy = vending_machine.grid.candy
+        %{vending_machine | grid: %{%VendingMachine{}.grid | candy: !candy}}
     end
   end
 
