@@ -6,7 +6,7 @@ defmodule VendingMachine do
   defstruct [
     {:coin_return, []},
     {:bank, []},
-    {:inventory, nil},
+    {:inventory, []},
     {:staging, []},
     {:display, "INSERT COIN"},
     {:bin, []},
@@ -40,19 +40,26 @@ defmodule VendingMachine do
   end
 
   def select(vending_machine, name) do
-    case name do
-      "cola" ->
-        cola = vending_machine.grid.cola
-        %{vending_machine | grid: %{%VendingMachine{}.grid | cola: !cola}}
+    selected = vending_machine.grid[name]
 
-      "chips" ->
-        chips = vending_machine.grid.chips
-        %{vending_machine | grid: %{%VendingMachine{}.grid | chips: !chips}}
-
-      "candy" ->
-        candy = vending_machine.grid.candy
-        %{vending_machine | grid: %{%VendingMachine{}.grid | candy: !candy}}
+    if selected do
+      %{vending_machine | grid: Map.replace!(%VendingMachine{}.grid, name, selected)}
+    else
+      if get_value_of_coins(vending_machine.staging) >= 1.0 do
+        if Enum.any?(vending_machine.inventory) do
+          remove_product_from_inventory(vending_machine, name)
+        end
+      else
+        %{vending_machine | grid: Map.replace!(%VendingMachine{}.grid, name, selected)}
+      end
     end
+  end
+
+  def remove_product_from_inventory(vm, name) do
+    product = Enum.find(vm.inventory, fn x -> x.name == name end)
+    newInventory = vm.inventory -- [product]
+    newBin = vm.bin ++ [product]
+    %VendingMachine{inventory: newInventory, bin: newBin}
   end
 
   defp add_coins([hd | tl]) do
@@ -63,7 +70,11 @@ defmodule VendingMachine do
     0
   end
 
-  defp get_value_of_coin(coin) do
+  def get_value_of_coins(list) do
+    Enum.reduce(list, 0, &(VendingMachine.get_value_of_coin(&1) + &2))
+  end
+
+  def get_value_of_coin(coin) do
     case coin.weight do
       @nickel -> 0.05
       @dime -> 0.10

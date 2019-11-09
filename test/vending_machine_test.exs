@@ -7,6 +7,10 @@ defmodule VendingMachineTest do
   @dime %Coin{weight: 2.268}
   @quarter %Coin{weight: 5.670}
 
+  @cola %Product{name: :cola}
+  @chips %Product{name: :chips}
+  @candy %Product{name: :candy}
+
   test "Add invalid coin to Vending machine with $0 displays 'INSERT COIN' and returns invalid coin" do
     oldVm = %VendingMachine{}
     newVm = VendingMachine.amount(oldVm, @invalid)
@@ -66,5 +70,21 @@ defmodule VendingMachineTest do
     vm = %VendingMachine{grid: %{%VendingMachine{}.grid | candy: true}}
     vm = VendingMachine.select(vm, "candy")
     assert vm.grid[:candy] == false
+  end
+
+  test "removes product from inventory" do
+    vm = %VendingMachine{inventory: [@cola, @cola, @cola]}
+    newVm = VendingMachine.remove_product_from_inventory(vm, :cola)
+    assert %VendingMachine{inventory: [@cola, @cola], bin: [@cola]} == newVm
+  end
+
+  test "returns cola if $1.00 has been inserted and 'cola' has been selected" do
+    vm = %VendingMachine{
+      inventory: [%Product{name: :cola}],
+      staging: [@quarter, @quarter, @quarter, @quarter]
+    }
+
+    vm = VendingMachine.select(vm, :cola)
+    assert vm.bin == [%Product{name: :cola}]
   end
 end
