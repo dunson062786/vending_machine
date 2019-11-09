@@ -11,10 +11,10 @@ defmodule VendingMachineTest do
   @chips %Product{name: :chips}
   @candy %Product{name: :candy}
 
-  test "Add invalid coin to Vending machine with $0 displays 'INSERT COIN' and returns invalid coin" do
+  test "Add invalid coin to Vending machine with $0 displays 'INSERT COIN' and returns the invalid coin" do
     oldVm = %VendingMachine{}
     newVm = VendingMachine.amount(oldVm, @invalid)
-    expected = %{oldVm | coin_return: [@invalid]}
+    expected = %{oldVm | display: "INSERT COIN", coin_return: [@invalid]}
     assert newVm == expected
   end
 
@@ -72,13 +72,13 @@ defmodule VendingMachineTest do
     assert vm.grid[:candy] == false
   end
 
-  test "removes product from inventory" do
+  test "able to remove product from inventory" do
     vm = %VendingMachine{inventory: [@cola, @cola, @cola]}
     newVm = VendingMachine.remove_product_from_inventory(vm, :cola)
-    assert %VendingMachine{inventory: [@cola, @cola], bin: [@cola]} == newVm
+    assert %VendingMachine{display: "THANK YOU", inventory: [@cola, @cola], bin: [@cola]} == newVm
   end
 
-  test "returns cola if $1.00 has been inserted and 'cola' has been selected" do
+  test "returns cola and displays 'THANK YOU' if $1.00 has been inserted and 'cola' has been selected" do
     vm = %VendingMachine{
       inventory: [%Product{name: :cola}],
       staging: [@quarter, @quarter, @quarter, @quarter]
@@ -86,5 +86,6 @@ defmodule VendingMachineTest do
 
     vm = VendingMachine.select(vm, :cola)
     assert vm.bin == [%Product{name: :cola}]
+    assert vm.display == "THANK YOU"
   end
 end

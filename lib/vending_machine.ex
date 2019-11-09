@@ -71,7 +71,7 @@ defmodule VendingMachine do
     product = Enum.find(vm.inventory, fn x -> x.name == name end)
     newInventory = vm.inventory -- [product]
     newBin = vm.bin ++ [product]
-    %VendingMachine{inventory: newInventory, bin: newBin}
+    %VendingMachine{display: "THANK YOU", inventory: newInventory, bin: newBin}
   end
 
   defp add_coins([hd | tl]) do
