@@ -40,35 +40,35 @@ defmodule VendingMachineTest do
   end
 
   test "selects item when selected for first time" do
-    vm = VendingMachine.select(%VendingMachine{}, "cola")
+    vm = VendingMachine.select(%VendingMachine{}, :cola)
     assert vm.grid[:cola] == true
-    vm = VendingMachine.select(%VendingMachine{}, "chips")
+    vm = VendingMachine.select(%VendingMachine{}, :chips)
     assert vm.grid[:chips] == true
-    vm = VendingMachine.select(%VendingMachine{}, "candy")
+    vm = VendingMachine.select(%VendingMachine{}, :candy)
     assert vm.grid[:candy] == true
   end
 
   test "deselects item when new item is selected" do
     vm = %VendingMachine{grid: %{%VendingMachine{}.grid | cola: true}}
-    vm = VendingMachine.select(vm, "chips")
+    vm = VendingMachine.select(vm, :chips)
     assert vm.grid[:cola] == false
     vm = %VendingMachine{grid: %{%VendingMachine{}.grid | chips: true}}
-    vm = VendingMachine.select(vm, "candy")
+    vm = VendingMachine.select(vm, :candy)
     assert vm.grid[:chips] == false
     vm = %VendingMachine{grid: %{%VendingMachine{}.grid | candy: true}}
-    vm = VendingMachine.select(vm, "chips")
+    vm = VendingMachine.select(vm, :chips)
     assert vm.grid[:candy] == false
   end
 
   test "deselects item if selected again" do
     vm = %VendingMachine{grid: %{%VendingMachine{}.grid | cola: true}}
-    vm = VendingMachine.select(vm, "cola")
+    vm = VendingMachine.select(vm, :cola)
     assert vm.grid[:cola] == false
     vm = %VendingMachine{grid: %{%VendingMachine{}.grid | chips: true}}
-    vm = VendingMachine.select(vm, "chips")
+    vm = VendingMachine.select(vm, :chips)
     assert vm.grid[:chips] == false
     vm = %VendingMachine{grid: %{%VendingMachine{}.grid | candy: true}}
-    vm = VendingMachine.select(vm, "candy")
+    vm = VendingMachine.select(vm, :candy)
     assert vm.grid[:candy] == false
   end
 

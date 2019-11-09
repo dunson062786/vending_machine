@@ -43,14 +43,26 @@ defmodule VendingMachine do
     selected = vending_machine.grid[name]
 
     if selected do
-      %{vending_machine | grid: Map.replace!(%VendingMachine{}.grid, name, selected)}
+      %{vending_machine | grid: Map.replace!(vending_machine.grid, name, !selected)}
     else
       if get_value_of_coins(vending_machine.staging) >= 1.0 do
         if Enum.any?(vending_machine.inventory) do
           remove_product_from_inventory(vending_machine, name)
         end
       else
-        %{vending_machine | grid: Map.replace!(%VendingMachine{}.grid, name, selected)}
+        %{
+          vending_machine
+          | grid:
+              Enum.into(vending_machine.grid, %{}, fn {k, v} ->
+                cond do
+                  k == name -> {k, true}
+                  k == :cola -> {k, false}
+                  k == :chips -> {k, false}
+                  k == :candy -> {k, false}
+                  true -> {k, v}
+                end
+              end)
+        }
       end
     end
   end
