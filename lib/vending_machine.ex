@@ -8,7 +8,7 @@ defmodule VendingMachine do
             bank: [],
             inventory: [],
             staging: [],
-            display: "INSERT COIN",
+            display: nil,
             bin: [],
             grid: %{cola: false, chips: false, candy: false},
             ledger: %{cola: 100, chips: 50, candy: 65},
@@ -30,23 +30,88 @@ defmodule VendingMachine do
   end
 
   def select_product(vending_machine, product) do
-    selected = get_in(vending_machine, [Access.key(:grid), Access.key(product)])
-
-    if selected do
-      deselect_selected(vending_machine, product)
-    else
-      vending_machine
-      |> select_item_in_grid(product)
-      |> process_transaction()
-    end
+    vending_machine
+    |> select_item_in_grid(product)
+    |> process_transaction()
   end
 
   def check_display(vending_machine) do
-    case vending_machine.display do
-      "THANK YOU" ->
+    cond do
+      vending_machine.display == "THANK YOU" ->
         {put_in(vending_machine.display, "INSERT COIN"), "THANK YOU"}
 
-      _ ->
+      vending_machine.display == "PRICE $1.00" ->
+        if vending_machine.staging == [] do
+          if can_make_change(vending_machine) do
+            {put_in(vending_machine.display, "INSERT COIN"), "PRICE $1.00"}
+          else
+            {put_in(vending_machine.display, "EXACT CHANGE ONLY"), "PRICE $1.00"}
+          end
+        else
+          amount_inserted =
+            vending_machine.staging
+            |> get_value_of_coins()
+            |> format_for_currency()
+
+          {put_in(vending_machine.display, amount_inserted), "PRICE $1.00"}
+        end
+
+      vending_machine.display == "PRICE $0.65" ->
+        if vending_machine.staging == [] do
+          if can_make_change(vending_machine) do
+            {put_in(vending_machine.display, "INSERT COIN"), "PRICE $0.65"}
+          else
+            {put_in(vending_machine.display, "EXACT CHANGE ONLY"), "PRICE $0.65"}
+          end
+        else
+          amount_inserted =
+            vending_machine.staging
+            |> get_value_of_coins()
+            |> format_for_currency()
+
+          {put_in(vending_machine.display, amount_inserted), "PRICE $0.65"}
+        end
+
+      vending_machine.display == "PRICE $0.50" ->
+        if vending_machine.staging == [] do
+          if can_make_change(vending_machine) do
+            {put_in(vending_machine.display, "INSERT COIN"), "PRICE $0.50"}
+          else
+            {put_in(vending_machine.display, "EXACT CHANGE ONLY"), "PRICE $0.50"}
+          end
+        else
+          amount_inserted =
+            vending_machine.staging
+            |> get_value_of_coins()
+            |> format_for_currency()
+
+          {put_in(vending_machine.display, amount_inserted), "PRICE $0.50"}
+        end
+
+      vending_machine.display == "SOLD OUT" ->
+        if vending_machine.staging == [] do
+          if can_make_change(vending_machine) do
+            {put_in(vending_machine.display, "INSERT COIN"), "SOLD OUT"}
+          else
+            {put_in(vending_machine.display, "EXACT CHANGE ONLY"), "SOLD OUT"}
+          end
+        else
+          amount_inserted =
+            vending_machine.staging
+            |> get_value_of_coins()
+            |> format_for_currency()
+
+          {put_in(vending_machine.display, amount_inserted), "SOLD OUT"}
+        end
+
+      vending_machine.display == nil ->
+        if can_make_change(vending_machine) do
+          {put_in(vending_machine.display, "INSERT COIN"), "INSERT COIN"}
+        else
+          {put_in(vending_machine.display, "EXACT CHANGE ONLY"), "EXACT CHANGE ONLY"}
+        end
+
+      true ->
         {vending_machine, vending_machine.display}
     end
   end
@@ -59,7 +124,6 @@ defmodule VendingMachine do
   end
 
   def select_item_in_grid(vending_machine, product) do
-    vending_machine = deselect_everything(vending_machine)
     put_in(vending_machine, [Access.key(:grid), Access.key(product)], true)
   end
 
@@ -75,15 +139,12 @@ defmodule VendingMachine do
       vending_machine = deselect_everything(vending_machine)
       put_in(vending_machine.display, "SOLD OUT")
     else
-      {price, display_price} =
-        vending_machine
-        |> get_selected()
-        |> get_price()
+      price = get_price_of_selected(vending_machine)
 
       value_of_coins = get_value_of_coins(vending_machine.staging)
 
       if value_of_coins < price do
-        put_in(vending_machine.display, "PRICE #{display_price}")
+        put_in(vending_machine.display, "PRICE #{format_for_currency(price)}")
       else
         amount_owed = value_of_coins - price
 
@@ -98,26 +159,10 @@ defmodule VendingMachine do
           vending_machine = move_coins_to_bank(vending_machine)
           put_in(vending_machine.display, "THANK YOU")
         else
-          # return last coin
-          [last_coin | rest] = vending_machine.staging
-          vending_machine = put_in(vending_machine.staging, rest)
-
-          vending_machine =
-            put_in(vending_machine.coin_return, [last_coin | vending_machine.coin_return])
-
-          if amount_owed == get_value_of_coin(last_coin) do
-            # coincidentally that was the correct change hence give product and store the money
-            product = %Product{name: get_selected(vending_machine)}
-
-            vending_machine =
-              put_in(vending_machine.inventory, vending_machine.inventory -- [product])
-
-            vending_machine = put_in(vending_machine.bin, [product | vending_machine.bin])
-            vending_machine = move_coins_to_bank(vending_machine)
-            put_in(vending_machine.display, "THANK YOU")
-          else
-            vending_machine
-          end
+          # return coins and display "EXACT CHANGE ONLY"
+          vending_machine = put_in(vending_machine.coin_return, vending_machine.staging)
+          vending_machine = put_in(vending_machine.staging, [])
+          put_in(vending_machine.display, "EXACT CHANGE ONLY")
         end
       end
     end
@@ -133,14 +178,7 @@ defmodule VendingMachine do
       %{cola: true, chips: false, candy: false} -> :cola
       %{cola: false, chips: true, candy: false} -> :chips
       %{cola: false, chips: false, candy: true} -> :candy
-    end
-  end
-
-  def get_price(product) do
-    case product do
-      :cola -> {100, "$1.00"}
-      :chips -> {50, "$0.50"}
-      :candy -> {65, "$0.65"}
+      _ -> nil
     end
   end
 
@@ -151,6 +189,10 @@ defmodule VendingMachine do
     put_in(vending_machine.staging, [])
   end
 
+  @doc """
+  requires: can_make_change(vending_machine) is true
+  ensures: amount_owed is sent to coin_return
+  """
   def give_change(vending_machine, amount_owed) do
     cond do
       amount_owed >= 25 ->
@@ -194,6 +236,10 @@ defmodule VendingMachine do
     end
   end
 
+  @doc """
+  If the bank return any multiple of 5c up to 20c then there is enough money to make change
+  since you could always return coins from staging until you get within that range.
+  """
   def can_make_change(vending_machine) do
     number_of_nickels =
       Enum.count(vending_machine.bank, fn coin -> coin == %Coin{weight: @nickel} end)
@@ -205,6 +251,10 @@ defmodule VendingMachine do
       (number_of_nickels == 1 && number_of_dimes > 1)
   end
 
+  @doc """
+  requires: nickel or dime exists in vending machine bank
+  ensures: returns dime from bank if possible. Otherwise it returns a nickel.
+  """
   def remove_highest_non_quarter_coin(vending_machine) do
     if Enum.any?(vending_machine.bank, fn coin -> coin == %Coin{weight: @dime} end) do
       {%Coin{weight: @dime},
@@ -213,5 +263,16 @@ defmodule VendingMachine do
       {%Coin{weight: @nickel},
        put_in(vending_machine.bank, vending_machine.bank -- [%Coin{weight: @nickel}])}
     end
+  end
+
+  def return_coins(vending_machine) do
+    vending_machine =
+      put_in(vending_machine.coin_return, vending_machine.coin_return ++ vending_machine.staging)
+
+    put_in(vending_machine.staging, [])
+  end
+
+  def get_price_of_selected(vending_machine) do
+    get_in(vending_machine, [Access.key(:ledger), Access.key(get_selected(vending_machine))])
   end
 end

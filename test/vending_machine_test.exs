@@ -21,11 +21,11 @@ defmodule VendingMachine.Test do
       assert vm.coin_return == [@invalid]
     end
 
-    test "If staging is empty and you insert an invalid coin vending machine still displays 'INSERT COIN'" do
+    test "If staging is empty and you insert an invalid coin and vending machine cannot make change machine still displays 'EXACT CHANGE ONLY'" do
       vm = %VendingMachine{}
       vm = VendingMachine.insert_coin(vm, @invalid)
       {_vm, message} = VendingMachine.check_display(vm)
-      assert message == "INSERT COIN"
+      assert message == "EXACT CHANGE ONLY"
     end
 
     test "If staging is empty and you insert a nickel vending machine displays $0.05" do
@@ -35,7 +35,7 @@ defmodule VendingMachine.Test do
       assert message == "$0.05"
     end
 
-    test "If staging is empty and you insert a nickel vending machine displays $0.10" do
+    test "If staging is empty and you insert a dime vending machine displays $0.10" do
       vm = %VendingMachine{}
       vm = VendingMachine.insert_coin(vm, @dime)
       {_vm, message} = VendingMachine.check_display(vm)
@@ -58,66 +58,26 @@ defmodule VendingMachine.Test do
             %Product{name: :cola},
             %Product{name: :chips},
             %Product{name: :candy}
-          ]
+          ],
+          bank: [@nickel, @nickel, @dime]
         }
       }
     end
 
-    test "selects cola if not sold out and selected for the first time", %{vending_machine: vm} do
+    test "displays price of cola if selected before enough money has been inserted", %{
+      vending_machine: vm
+    } do
       vm = VendingMachine.select_product(vm, :cola)
-      assert vm.grid.cola == true
+      assert elem(VendingMachine.check_display(vm), 1) == "PRICE $1.00"
     end
 
-    test "selects chips if not sold out and selected for the first time", %{vending_machine: vm} do
-      vm = VendingMachine.select_product(vm, :chips)
-      assert vm.grid.chips == true
-    end
-
-    test "selects candy if not sold out and selected for the first time", %{vending_machine: vm} do
-      vm = VendingMachine.select_product(vm, :candy)
-      assert vm.grid.candy == true
-    end
-
-    test "deselects cola if chips is selected", %{vending_machine: vm} do
+    test "If cola is selected and not enough money has been inserted and display is checked twice then INSERT COIN is displayed",
+         %{
+           vending_machine: vm
+         } do
       vm = VendingMachine.select_product(vm, :cola)
-      vm = VendingMachine.select_product(vm, :chips)
-      assert vm.grid.cola == false
-    end
-
-    test "deselects chips if cola is selected", %{vending_machine: vm} do
-      vm = VendingMachine.select_product(vm, :chips)
-      vm = VendingMachine.select_product(vm, :cola)
-      assert vm.grid.chips == false
-    end
-
-    test "deselects candy if cola is selected", %{vending_machine: vm} do
-      vm = VendingMachine.select_product(vm, :candy)
-      vm = VendingMachine.select_product(vm, :cola)
-      assert vm.grid.candy == false
-    end
-
-    test "deselects cola if selected again", %{vending_machine: vm} do
-      vm =
-        VendingMachine.select_product(vm, :cola)
-        |> VendingMachine.select_product(:cola)
-
-      assert vm.grid.cola == false
-    end
-
-    test "deselects chips if selected again", %{vending_machine: vm} do
-      vm =
-        VendingMachine.select_product(vm, :chips)
-        |> VendingMachine.select_product(:chips)
-
-      assert vm.grid.chips == false
-    end
-
-    test "deselects candy if selected again", %{vending_machine: vm} do
-      vm =
-        VendingMachine.select_product(vm, :candy)
-        |> VendingMachine.select_product(:candy)
-
-      assert vm.grid.candy == false
+      {vm, _} = VendingMachine.check_display(vm)
+      assert elem(VendingMachine.check_display(vm), 1) == "INSERT COIN"
     end
   end
 
@@ -457,16 +417,7 @@ defmodule VendingMachine.Test do
             %Product{name: :candy}
           ],
           bank: [
-            @quarter,
-            @quarter,
-            @quarter,
-            @quarter,
             @dime,
-            @dime,
-            @dime,
-            @dime,
-            @nickel,
-            @nickel,
             @nickel,
             @nickel
           ]
@@ -513,10 +464,26 @@ defmodule VendingMachine.Test do
     end
   end
 
-  describe "VendingMachine.can_make_change/2" do
+  describe "VendingMachine.return_coins/1" do
+    test "returns quarter if quarter is in staging" do
+      vm = %VendingMachine{staging: [@quarter], coin_return: []}
+      vm = VendingMachine.return_coins(vm)
+      assert vm.staging == [] && vm.coin_return == [@quarter]
+    end
+  end
+
+  describe "VendingMachine.check_display/1" do
     setup do
       %{
-        vending_machine: %VendingMachine{
+        sold_out_vending_machine: %VendingMachine{
+          inventory: [],
+          bank: [
+            @nickel,
+            @nickel,
+            @dime
+          ]
+        },
+        full_vending_machine: %VendingMachine{
           inventory: [
             %Product{name: :cola},
             %Product{name: :chips},
@@ -527,21 +494,207 @@ defmodule VendingMachine.Test do
             @nickel,
             @dime
           ]
+        },
+        broke_vending_machine: %VendingMachine{
+          inventory: [
+            %Product{name: :cola},
+            %Product{name: :chips},
+            %Product{name: :candy}
+          ],
+          bank: []
+        },
+        empty_vending_machine: %VendingMachine{
+          inventory: [],
+          bank: []
         }
       }
     end
 
-    test "if change exists in staging, but not the bank it still returns true", %{
-      vending_machine: vm
+    test "If not enough money has been inserted, because no money has been inserted and product is sold out, but product is selected and display is checked SOLD OUT is displayed",
+         %{
+           sold_out_vending_machine: vm
+         } do
+      vm = VendingMachine.select_product(vm, :cola)
+      {_vm, message} = VendingMachine.check_display(vm)
+      assert message == "SOLD OUT"
+    end
+
+    test "If not enough money has been inserted, because some money has been inserted, but not enough and product is sold out, but product is selected and display is checked twice then amount in staging is displayed",
+         %{
+           sold_out_vending_machine: vm
+         } do
+      vm = VendingMachine.insert_coin(vm, @quarter)
+      vm = VendingMachine.select_product(vm, :cola)
+      {vm, _message} = VendingMachine.check_display(vm)
+      {_vm, message} = VendingMachine.check_display(vm)
+      assert message == "$0.25"
+    end
+
+    test "If not enough money has been inserted, because some, but not money has been inserted and product is sold out, but product is selected and display is checked twice then INSERT COIN is displayed",
+         %{
+           sold_out_vending_machine: vm
+         } do
+      vm = VendingMachine.select_product(vm, :cola)
+      {vm, _message} = VendingMachine.check_display(vm)
+      {_vm, message} = VendingMachine.check_display(vm)
+      assert message == "INSERT COIN"
+    end
+
+    test "If not enough money has been inserted and product is not sold out, but product is selected and display is checked price of product is displayed",
+         %{
+           full_vending_machine: vm
+         } do
+      vm = VendingMachine.select_product(vm, :cola)
+      {_vm, message} = VendingMachine.check_display(vm)
+      assert message == "PRICE $1.00"
+    end
+
+    test "If not enough money has been inserted, because no money has been inserted and cola is not sold out, but cola is selected and display is checked twice then INSERT COIN is displayed",
+         %{
+           full_vending_machine: vm
+         } do
+      vm = VendingMachine.select_product(vm, :cola)
+      {vm, _message} = VendingMachine.check_display(vm)
+      {_vm, message} = VendingMachine.check_display(vm)
+      assert message == "INSERT COIN"
+    end
+
+    test "If not enough money has been inserted, some money has been inserted and cola is not sold out, but cola is selected and display is checked twice then amount of money already inserted is displayed",
+         %{
+           full_vending_machine: vm
+         } do
+      vm = VendingMachine.insert_coin(vm, @quarter)
+      vm = VendingMachine.select_product(vm, :cola)
+      {vm, _message} = VendingMachine.check_display(vm)
+      {_vm, message} = VendingMachine.check_display(vm)
+      assert message == "$0.25"
+    end
+
+    test "If not enough money has been inserted, because no money has been inserted and chips is not sold out, but chips is selected and display is checked twice then INSERT COIN is displayed",
+         %{
+           full_vending_machine: vm
+         } do
+      vm = VendingMachine.select_product(vm, :chips)
+      {vm, _message} = VendingMachine.check_display(vm)
+      {_vm, message} = VendingMachine.check_display(vm)
+      assert message == "INSERT COIN"
+    end
+
+    test "If not enough money has been inserted, some money has been inserted and chips is not sold out, but chips is selected and display is checked twice then amount of money already inserted is displayed",
+         %{
+           full_vending_machine: vm
+         } do
+      vm = VendingMachine.insert_coin(vm, @quarter)
+      vm = VendingMachine.select_product(vm, :chips)
+      {vm, _message} = VendingMachine.check_display(vm)
+      {_vm, message} = VendingMachine.check_display(vm)
+      assert message == "$0.25"
+    end
+
+    test "If not enough money has been inserted, because no money has been inserted and candy is not sold out, but candy is selected and display is checked twice then INSERT COIN is displayed",
+         %{
+           full_vending_machine: vm
+         } do
+      vm = VendingMachine.select_product(vm, :candy)
+      {vm, _message} = VendingMachine.check_display(vm)
+      {_vm, message} = VendingMachine.check_display(vm)
+      assert message == "INSERT COIN"
+    end
+
+    test "If not enough money has been inserted, some money has been inserted and candy is not sold out, but candy is selected and display is checked twice then amount of money already inserted is displayed",
+         %{
+           full_vending_machine: vm
+         } do
+      vm = VendingMachine.insert_coin(vm, @quarter)
+      vm = VendingMachine.select_product(vm, :candy)
+      {vm, _message} = VendingMachine.check_display(vm)
+      {_vm, message} = VendingMachine.check_display(vm)
+      assert message == "$0.25"
+    end
+
+    test "If bank can make change and display is checked INSERT COIN should be displayed",
+         %{
+           full_vending_machine: vm
+         } do
+      {_vm, message} = VendingMachine.check_display(vm)
+      assert message == "INSERT COIN"
+    end
+
+    test "If bank can not make change and display is checked EXACT CHANGE ONLY should be displayed",
+         %{
+           broke_vending_machine: vm
+         } do
+      {_vm, message} = VendingMachine.check_display(vm)
+      assert message == "EXACT CHANGE ONLY"
+    end
+
+    test "If bank can not make change and cola is selected and 'PRICE $1.00' is displayed and display is checked again. Then display should say 'EXACT CHANGE ONLY'",
+         %{
+           broke_vending_machine: vm
+         } do
+      vm = VendingMachine.select_product(vm, :cola)
+      {vm, _message} = VendingMachine.check_display(vm)
+      {_vm, message} = VendingMachine.check_display(vm)
+      assert message == "EXACT CHANGE ONLY"
+    end
+
+    test "If bank can not make change and candy is selected and 'PRICE $0.65' is displayed and display is checked again. Then display should say 'EXACT CHANGE ONLY'",
+         %{
+           broke_vending_machine: vm
+         } do
+      vm = VendingMachine.select_product(vm, :candy)
+      {vm, _message} = VendingMachine.check_display(vm)
+      {_vm, message} = VendingMachine.check_display(vm)
+      assert message == "EXACT CHANGE ONLY"
+    end
+
+    test "If bank can not make change and chips are selected and 'PRICE $0.50' is displayed and display is checked again. Then display should say 'EXACT CHANGE ONLY'",
+         %{
+           broke_vending_machine: vm
+         } do
+      vm = VendingMachine.select_product(vm, :chips)
+      {vm, _message} = VendingMachine.check_display(vm)
+      {_vm, message} = VendingMachine.check_display(vm)
+      assert message == "EXACT CHANGE ONLY"
+    end
+
+    test "If bank cannot make change and cola is sold out and cola is selected an 'SOLD OUT' is displayed and display is checked again. Then display should say 'EXACT CHANGE ONLY'",
+         %{
+           empty_vending_machine: vm
+         } do
+      vm = VendingMachine.select_product(vm, :chips)
+      {vm, _message} = VendingMachine.check_display(vm)
+      {_vm, message} = VendingMachine.check_display(vm)
+      assert message == "EXACT CHANGE ONLY"
+    end
+  end
+
+  describe "VendingMachine.select_product/2" do
+    setup do
+      %{
+        broke_vending_machine: %VendingMachine{
+          inventory: [
+            %Product{name: :cola},
+            %Product{name: :chips},
+            %Product{name: :candy}
+          ]
+        }
+      }
+    end
+
+    test "returns all coins when enforcing correct change", %{
+      broke_vending_machine: vm
     } do
       vm =
         VendingMachine.insert_coin(vm, @quarter)
         |> VendingMachine.insert_coin(@quarter)
-        |> VendingMachine.insert_coin(@nickel)
-        |> VendingMachine.insert_coin(@nickel)
-        |> VendingMachine.insert_coin(@dime)
+        |> VendingMachine.insert_coin(@quarter)
+        |> VendingMachine.insert_coin(@quarter)
 
-      assert VendingMachine.can_make_change(vm) == true
+      vm = VendingMachine.select_product(vm, :chips)
+
+      assert vm.staging == []
+      assert vm.coin_return == [@quarter, @quarter, @quarter, @quarter]
     end
   end
 end
