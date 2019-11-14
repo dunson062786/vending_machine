@@ -4,10 +4,10 @@ defmodule VendingMachine do
   @dime 2.268
   @quarter 5.670
 
-  defstruct coin_return: [],
-            bank: [],
+  defstruct coin_return: %CoinStorage{},
+            bank: %CoinStorage{},
             inventory: [],
-            staging: [],
+            staging: %CoinStorage{},
             display: nil,
             bin: [],
             grid: %{cola: false, chips: false, candy: false},
@@ -17,15 +17,19 @@ defmodule VendingMachine do
   def insert_coin(vending_machine, coin) do
     case coin.weight do
       value when value in [@nickel, @dime, @quarter] ->
-        vending_machine = put_in(vending_machine.staging, [coin | vending_machine.staging])
+        vending_machine =
+          put_in(vending_machine.staging, CoinStorage.add_coin(vending_machine.staging, coin))
 
         put_in(
           vending_machine.display,
-          format_for_currency(get_value_of_coins(vending_machine.staging))
+          format_for_currency(vending_machine.staging.total)
         )
 
       _ ->
-        put_in(vending_machine.coin_return, [coin | vending_machine.coin_return])
+        put_in(
+          vending_machine.coin_return,
+          CoinStorage.add_coin(vending_machine.coin_return, coin)
+        )
     end
   end
 
@@ -37,71 +41,20 @@ defmodule VendingMachine do
 
   def check_display(vending_machine) do
     cond do
-      vending_machine.display == "THANK YOU" ->
-        {put_in(vending_machine.display, "INSERT COIN"), "THANK YOU"}
-
-      vending_machine.display == "PRICE $1.00" ->
+      Enum.member?(
+        ["THANK YOU", "PRICE $1.00", "PRICE $0.65", "PRICE $0.50", "SOLD OUT"],
+        vending_machine.display
+      ) ->
         if vending_machine.staging == [] do
           if can_make_change(vending_machine) do
-            {put_in(vending_machine.display, "INSERT COIN"), "PRICE $1.00"}
+            {put_in(vending_machine.display, "INSERT COIN"), vending_machine.display}
           else
-            {put_in(vending_machine.display, "EXACT CHANGE ONLY"), "PRICE $1.00"}
+            {put_in(vending_machine.display, "EXACT CHANGE ONLY"), vending_machine.display}
           end
         else
-          amount_inserted =
-            vending_machine.staging
-            |> get_value_of_coins()
-            |> format_for_currency()
+          amount_inserted = format_for_currency(vending_machine.staging.total)
 
-          {put_in(vending_machine.display, amount_inserted), "PRICE $1.00"}
-        end
-
-      vending_machine.display == "PRICE $0.65" ->
-        if vending_machine.staging == [] do
-          if can_make_change(vending_machine) do
-            {put_in(vending_machine.display, "INSERT COIN"), "PRICE $0.65"}
-          else
-            {put_in(vending_machine.display, "EXACT CHANGE ONLY"), "PRICE $0.65"}
-          end
-        else
-          amount_inserted =
-            vending_machine.staging
-            |> get_value_of_coins()
-            |> format_for_currency()
-
-          {put_in(vending_machine.display, amount_inserted), "PRICE $0.65"}
-        end
-
-      vending_machine.display == "PRICE $0.50" ->
-        if vending_machine.staging == [] do
-          if can_make_change(vending_machine) do
-            {put_in(vending_machine.display, "INSERT COIN"), "PRICE $0.50"}
-          else
-            {put_in(vending_machine.display, "EXACT CHANGE ONLY"), "PRICE $0.50"}
-          end
-        else
-          amount_inserted =
-            vending_machine.staging
-            |> get_value_of_coins()
-            |> format_for_currency()
-
-          {put_in(vending_machine.display, amount_inserted), "PRICE $0.50"}
-        end
-
-      vending_machine.display == "SOLD OUT" ->
-        if vending_machine.staging == [] do
-          if can_make_change(vending_machine) do
-            {put_in(vending_machine.display, "INSERT COIN"), "SOLD OUT"}
-          else
-            {put_in(vending_machine.display, "EXACT CHANGE ONLY"), "SOLD OUT"}
-          end
-        else
-          amount_inserted =
-            vending_machine.staging
-            |> get_value_of_coins()
-            |> format_for_currency()
-
-          {put_in(vending_machine.display, amount_inserted), "SOLD OUT"}
+          {put_in(vending_machine.display, amount_inserted), vending_machine.display}
         end
 
       vending_machine.display == nil ->
@@ -114,13 +67,6 @@ defmodule VendingMachine do
       true ->
         {vending_machine, vending_machine.display}
     end
-  end
-
-  def deselect_selected(vending_machine, product) do
-    %VendingMachine{
-      vending_machine
-      | grid: Map.replace!(vending_machine.grid, product, false)
-    }
   end
 
   def select_item_in_grid(vending_machine, product) do
@@ -141,12 +87,10 @@ defmodule VendingMachine do
     else
       price = get_price_of_selected(vending_machine)
 
-      value_of_coins = get_value_of_coins(vending_machine.staging)
-
-      if value_of_coins < price do
+      if vending_machine.staging.total < price do
         put_in(vending_machine.display, "PRICE #{format_for_currency(price)}")
       else
-        amount_owed = value_of_coins - price
+        amount_owed = vending_machine.staging.total - price
 
         if amount_owed == 0 || can_make_change(vending_machine) do
           product = %Product{name: get_selected(vending_machine)}
@@ -155,7 +99,7 @@ defmodule VendingMachine do
             put_in(vending_machine.inventory, vending_machine.inventory -- [product])
 
           vending_machine = put_in(vending_machine.bin, [product | vending_machine.bin])
-          vending_machine = give_change(vending_machine, value_of_coins - price)
+          vending_machine = give_change(vending_machine, amount_owed)
           vending_machine = move_coins_to_bank(vending_machine)
           put_in(vending_machine.display, "THANK YOU")
         else
@@ -183,10 +127,12 @@ defmodule VendingMachine do
   end
 
   def move_coins_to_bank(vending_machine) do
-    vending_machine =
-      put_in(vending_machine.bank, vending_machine.bank ++ vending_machine.staging)
+    {coins, empty_staging} = CoinStorage.remove_coins(vending_machine.staging)
 
-    put_in(vending_machine.staging, [])
+    vending_machine =
+      put_in(vending_machine.bank, CoinStorage.add_coin(vending_machine.bank, coins))
+
+    put_in(vending_machine.staging, empty_staging)
   end
 
   @doc """
@@ -196,40 +142,17 @@ defmodule VendingMachine do
   def give_change(vending_machine, amount_owed) do
     cond do
       amount_owed >= 25 ->
-        [last_coin | rest] = vending_machine.staging
-        vending_machine = put_in(vending_machine.staging, rest)
-
-        vending_machine =
-          put_in(
-            vending_machine.coin_return,
-            [last_coin | vending_machine.coin_return]
-          )
-
-        give_change(vending_machine, amount_owed - get_value_of_coin(last_coin))
+        {coin, rest} = CoinStorage.remove_any(vending_machine.staging)
+        vending_machine = transfer(vending_machine, :staging, :coin_return, coin)
+        give_change(vending_machine, amount_owed - get_value_of_coin(coin))
 
       amount_owed >= 10 ->
-        {highest_non_quarter_coin, vending_machine} =
-          remove_highest_non_quarter_coin(vending_machine)
-
-        vending_machine =
-          put_in(
-            vending_machine.coin_return,
-            [highest_non_quarter_coin | vending_machine.coin_return]
-          )
-
-        give_change(vending_machine, amount_owed - get_value_of_coin(highest_non_quarter_coin))
+        coin = CoinStorage.get_highest_non_quarter_coin(vending_machine.bank)
+        vending_machine = transfer(vending_machine, :bank, :coin_return, coin)
+        give_change(vending_machine, amount_owed - get_value_of_coin(coin))
 
       amount_owed >= 5 ->
-        vending_machine =
-          put_in(vending_machine.bank, vending_machine.bank -- [%Coin{weight: @nickel}])
-
-        vending_machine =
-          put_in(
-            vending_machine.coin_return,
-            [%Coin{weight: @nickel} | vending_machine.coin_return]
-          )
-
-        give_change(vending_machine, amount_owed - 5)
+        vending_machine = transfer(vending_machine, :bank, :coin_return, Coin.createNickel())
 
       true ->
         vending_machine
@@ -242,10 +165,9 @@ defmodule VendingMachine do
   """
   def can_make_change(vending_machine) do
     number_of_nickels =
-      Enum.count(vending_machine.bank, fn coin -> coin == %Coin{weight: @nickel} end)
+      Enum.count(vending_machine.bank, fn coin -> coin == Coin.createNickel() end)
 
-    number_of_dimes =
-      Enum.count(vending_machine.bank, fn coin -> coin == %Coin{weight: @dime} end)
+    number_of_dimes = Enum.count(vending_machine.bank, fn coin -> coin == Coin.createDime() end)
 
     number_of_nickels > 3 || (number_of_nickels > 1 && number_of_dimes > 0) ||
       (number_of_nickels == 1 && number_of_dimes > 1)
@@ -256,12 +178,12 @@ defmodule VendingMachine do
   ensures: returns dime from bank if possible. Otherwise it returns a nickel.
   """
   def remove_highest_non_quarter_coin(vending_machine) do
-    if Enum.any?(vending_machine.bank, fn coin -> coin == %Coin{weight: @dime} end) do
-      {%Coin{weight: @dime},
-       put_in(vending_machine.bank, vending_machine.bank -- [%Coin{weight: @dime}])}
+    if Enum.any?(vending_machine.bank, fn coin -> coin == Coin.createDime() end) do
+      {Coin.createDime(),
+       put_in(vending_machine.bank, vending_machine.bank -- [Coin.createDime()])}
     else
-      {%Coin{weight: @nickel},
-       put_in(vending_machine.bank, vending_machine.bank -- [%Coin{weight: @nickel}])}
+      {Coin.createNickel(),
+       put_in(vending_machine.bank, vending_machine.bank -- [Coin.createNickel()])}
     end
   end
 
@@ -275,4 +197,40 @@ defmodule VendingMachine do
   def get_price_of_selected(vending_machine) do
     get_in(vending_machine, [Access.key(:ledger), Access.key(get_selected(vending_machine))])
   end
+
+  def create_full_vending_machine() do
+    %VendingMachine{
+      inventory: [
+        %Product{name: :cola},
+        %Product{name: :chips},
+        %Product{name: :candy}
+      ],
+      bank: [
+        Coin.createNickel(),
+        Coin.createNickel(),
+        Coin.createDime()
+      ]
+    }
+  end
+
+  def transfer(vending_machine, from, to, coin) do
+    vending_machine =
+      put_in(
+        vending_machine,
+        [Access.key(from)],
+        CoinStorage.remove_coin(get_in(vending_machine, [Access.key(from)]), coin)
+      )
+
+    put_in(
+      vending_machine,
+      [Access.key(to)],
+      CoinStorage.add_coin(get_in(vending_machine, [Access.key(to)]), coin)
+    )
+  end
+
+  # def remove_coin(from, amount) do
+  # end
+
+  # def add_coin(vending_machine, to, coin) do
+  # end
 end
