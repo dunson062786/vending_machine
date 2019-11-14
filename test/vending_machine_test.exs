@@ -4,46 +4,80 @@ defmodule VendingMachine.Test do
   doctest VendingMachine
 
   @invalid %Coin{weight: 2.5}
-  @nickel %Coin{weight: 5.0}
-  @dime %Coin{weight: 2.268}
-  @quarter %Coin{weight: 5.670}
+  @nickel Coin.createNickel()
+  @dime Coin.createDime()
+  @quarter Coin.createQuarter()
 
   describe "VendingMachine.insert_coin/2" do
-    test "Adding valid coin to vending machine updates staging" do
-      vm = %VendingMachine{}
+    setup do
+      %{
+        vending_machine: %VendingMachine{
+          inventory: [
+            %Product{name: :cola},
+            %Product{name: :chips},
+            %Product{name: :candy}
+          ],
+          bank: %CoinStorage{
+            wallet: [@nickel, @nickel, @dime],
+            tally: %{quarter: 0, dime: 1, nickel: 2},
+            total: 20
+          },
+          coin_return: [],
+          staging: %CoinStorage{}
+        },
+        broke_vending_machine: %VendingMachine{
+          inventory: [
+            %Product{name: :cola},
+            %Product{name: :chips},
+            %Product{name: :candy}
+          ],
+          bank: %CoinStorage{},
+          coin_return: [],
+          staging: %CoinStorage{}
+        }
+      }
+    end
+    test "Adding valid coin to vending machine updates staging", %{
+      vending_machine: vm
+    } do
       vm = VendingMachine.insert_coin(vm, @quarter)
-      assert vm.staging == [@quarter]
+      assert vm.staging.wallet == [@quarter]
     end
 
-    test "Adding invalid coin updates coin_return" do
-      vm = %VendingMachine{}
+    test "Adding invalid coin updates coin_return", %{
+      vending_machine: vm
+    } do
       vm = VendingMachine.insert_coin(vm, @invalid)
       assert vm.coin_return == [@invalid]
     end
 
-    test "If staging is empty and you insert an invalid coin and vending machine cannot make change machine still displays 'EXACT CHANGE ONLY'" do
-      vm = %VendingMachine{}
+    test "If staging is empty and you insert an invalid coin and vending machine cannot make change machine still displays 'EXACT CHANGE ONLY'", %{
+      broke_vending_machine: vm
+    } do
       vm = VendingMachine.insert_coin(vm, @invalid)
       {_vm, message} = VendingMachine.check_display(vm)
       assert message == "EXACT CHANGE ONLY"
     end
 
-    test "If staging is empty and you insert a nickel vending machine displays $0.05" do
-      vm = %VendingMachine{}
+    test "If staging is empty and you insert a nickel vending machine displays $0.05", %{
+      vending_machine: vm
+    } do
       vm = VendingMachine.insert_coin(vm, @nickel)
       {_vm, message} = VendingMachine.check_display(vm)
       assert message == "$0.05"
     end
 
-    test "If staging is empty and you insert a dime vending machine displays $0.10" do
-      vm = %VendingMachine{}
+    test "If staging is empty and you insert a dime vending machine displays $0.10", %{
+      vending_machine: vm
+    } do
       vm = VendingMachine.insert_coin(vm, @dime)
       {_vm, message} = VendingMachine.check_display(vm)
       assert message == "$0.10"
     end
 
-    test "If staging is empty and you insert a quarter vending machine displays $0.25" do
-      vm = %VendingMachine{}
+    test "If staging is empty and you insert a quarter vending machine displays $0.25", %{
+      vending_machine: vm
+    } do
       vm = VendingMachine.insert_coin(vm, @quarter)
       {_vm, message} = VendingMachine.check_display(vm)
       assert message == "$0.25"
@@ -59,7 +93,13 @@ defmodule VendingMachine.Test do
             %Product{name: :chips},
             %Product{name: :candy}
           ],
-          bank: [@nickel, @nickel, @dime]
+          bank: %CoinStorage{
+            wallet: [@nickel, @nickel, @dime],
+            tally: %{quarter: 0, dime: 1, nickel: 2},
+            total: 20
+          },
+          coin_return: [],
+          staging: %CoinStorage{}
         }
       }
     end
@@ -76,7 +116,7 @@ defmodule VendingMachine.Test do
            vending_machine: vm
          } do
       vm = VendingMachine.select_product(vm, :cola)
-      {vm, _} = VendingMachine.check_display(vm)
+      {vm, _message} = VendingMachine.check_display(vm)
       assert elem(VendingMachine.check_display(vm), 1) == "INSERT COIN"
     end
   end
@@ -90,11 +130,13 @@ defmodule VendingMachine.Test do
             %Product{name: :chips},
             %Product{name: :candy}
           ],
-          bank: [
-            @nickel,
-            @nickel,
-            @dime
-          ]
+          bank: %CoinStorage{
+            wallet: [@nickel, @nickel, @dime],
+            tally: %{quarter: 0, dime: 1, nickel: 2},
+            total: 20
+          },
+          coin_return: [],
+          staging: %CoinStorage{}
         }
       }
     end
@@ -208,7 +250,7 @@ defmodule VendingMachine.Test do
       assert message == "INSERT COIN"
     end
 
-    test "if candy is dispensed and display is checked twice then INSERT COIN is displayed",
+    test "if candy is dispensed and display is checked twice then EXACT CHANGE ONLY is displayed",
          %{
            vending_machine: vm
          } do
@@ -224,7 +266,7 @@ defmodule VendingMachine.Test do
 
       {_vm, message} = VendingMachine.check_display(vm)
 
-      assert message == "INSERT COIN"
+      assert message == "EXACT CHANGE ONLY"
     end
 
     test "if cola is dispensed and change is returned then bank will be have $1.00 more",
@@ -240,15 +282,11 @@ defmodule VendingMachine.Test do
 
       vm = VendingMachine.select_product(vm, :cola)
 
-      assert vm.bank == [
-               @nickel,
-               @nickel,
-               @dime,
-               @quarter,
-               @quarter,
-               @quarter,
-               @quarter
-             ]
+      assert CoinStorage.equal?(vm.bank, %CoinStorage{
+        wallet: [@nickel, @nickel, @dime, @quarter, @quarter, @quarter, @quarter],
+        tally: %{quarter: 4, dime: 1, nickel: 2},
+        total: 120
+      }) == true
     end
 
     test "if cola is dispensed and change is returned then staging will be empty",
@@ -264,7 +302,7 @@ defmodule VendingMachine.Test do
 
       vm = VendingMachine.select_product(vm, :cola)
 
-      assert vm.staging == []
+      assert CoinStorage.equal?(vm.staging, %CoinStorage{}) == true
     end
 
     test "vending machine does not create money out of thin air", %{vending_machine: vm} do
@@ -279,7 +317,7 @@ defmodule VendingMachine.Test do
 
       vm = VendingMachine.select_product(vm, :candy)
 
-      assert get_value_of_coins(vm.staging) + get_value_of_coins(vm.bank) +
+      assert vm.staging.total + vm.bank.total +
                get_value_of_coins(vm.coin_return) == 90
     end
   end
@@ -324,7 +362,14 @@ defmodule VendingMachine.Test do
             %Product{name: :cola},
             %Product{name: :chips},
             %Product{name: :candy}
-          ]
+          ],
+          bank: %CoinStorage{
+            wallet: [@nickel, @nickel, @dime],
+            tally: %{quarter: 0, dime: 1, nickel: 2},
+            total: 20
+          },
+          coin_return: [],
+          staging: %CoinStorage{}
         }
       }
     end
@@ -416,11 +461,13 @@ defmodule VendingMachine.Test do
             %Product{name: :chips},
             %Product{name: :candy}
           ],
-          bank: [
-            @dime,
-            @nickel,
-            @nickel
-          ]
+          bank: %CoinStorage{
+            wallet: [@nickel, @nickel, @dime],
+            tally: %{quarter: 0, dime: 1, nickel: 2},
+            total: 20
+          },
+          coin_return: [],
+          staging: %CoinStorage{}
         }
       }
     end
@@ -465,10 +512,29 @@ defmodule VendingMachine.Test do
   end
 
   describe "VendingMachine.return_coins/1" do
-    test "returns quarter if quarter is in staging" do
-      vm = %VendingMachine{staging: [@quarter], coin_return: []}
+    setup do
+      %{
+        vending_machine: %VendingMachine{
+          inventory: [
+            %Product{name: :cola},
+            %Product{name: :chips},
+            %Product{name: :candy}
+          ],
+          bank: %CoinStorage{},
+          coin_return: [],
+          staging: %CoinStorage{
+            wallet: [@quarter],
+            tally: %{quarter: 1, dime: 0, nickel: 0},
+            total: 25
+          }
+        }
+      }
+    end
+
+    test "returns quarter if quarter is in staging", %{vending_machine: vm} do
       vm = VendingMachine.return_coins(vm)
-      assert vm.staging == [] && vm.coin_return == [@quarter]
+      assert CoinStorage.equal?(vm.staging, %CoinStorage{})
+      assert vm.coin_return.wallet == [@quarter]
     end
   end
 
@@ -477,11 +543,13 @@ defmodule VendingMachine.Test do
       %{
         sold_out_vending_machine: %VendingMachine{
           inventory: [],
-          bank: [
-            @nickel,
-            @nickel,
-            @dime
-          ]
+          bank: %CoinStorage{
+            wallet: [@nickel, @nickel, @dime],
+            tally: %{quarter: 0, dime: 1, nickel: 2},
+            total: 20
+          },
+          coin_return: [],
+          staging: %CoinStorage{}
         },
         full_vending_machine: %VendingMachine{
           inventory: [
@@ -489,11 +557,13 @@ defmodule VendingMachine.Test do
             %Product{name: :chips},
             %Product{name: :candy}
           ],
-          bank: [
-            @nickel,
-            @nickel,
-            @dime
-          ]
+          bank: %CoinStorage{
+            wallet: [@nickel, @nickel, @dime],
+            tally: %{quarter: 0, dime: 1, nickel: 2},
+            total: 20
+          },
+          coin_return: [],
+          staging: %CoinStorage{}
         },
         broke_vending_machine: %VendingMachine{
           inventory: [
@@ -501,11 +571,15 @@ defmodule VendingMachine.Test do
             %Product{name: :chips},
             %Product{name: :candy}
           ],
-          bank: []
+          bank: %CoinStorage{},
+          coin_return: [],
+          staging: %CoinStorage{}
         },
         empty_vending_machine: %VendingMachine{
           inventory: [],
-          bank: []
+          bank: %CoinStorage{},
+          coin_return: [],
+          staging: %CoinStorage{}
         }
       }
     end
@@ -692,9 +766,76 @@ defmodule VendingMachine.Test do
         |> VendingMachine.insert_coin(@quarter)
 
       vm = VendingMachine.select_product(vm, :chips)
-
-      assert vm.staging == []
+      assert CoinStorage.equal?(vm.staging, %CoinStorage{})
       assert vm.coin_return == [@quarter, @quarter, @quarter, @quarter]
+    end
+  end
+
+  describe "VendingMachine.transfer/4" do
+    setup do
+      %{
+        vending_machine: %VendingMachine{
+          inventory: [],
+          bank: %CoinStorage{
+            wallet: [@dime, @nickel, @nickel],
+            tally: %{quarter: 0, dime: 1, nickel: 2},
+            total: 20
+          },
+          coin_return: [],
+          staging: %CoinStorage{
+            wallet: [@quarter, @quarter, @quarter],
+            tally: %{quarter: 3, dime: 0, nickel: 0},
+            total: 75
+          }
+        }
+      }
+    end
+
+    test "If vending machine transfers dime from bank to coin_return then bank will have 10c less and coin_return will have 10c more",
+         %{vending_machine: vm} do
+      vm = VendingMachine.transfer_coin(vm, :bank, :coin_return, Coin.createDime())
+
+      assert CoinStorage.equal?(vm.bank, %CoinStorage{
+               wallet: [@nickel, @nickel],
+               tally: %{quarter: 0, dime: 0, nickel: 2},
+               total: 10
+             }) == true
+
+      assert vm.coin_return == [@dime]
+    end
+  end
+
+  describe "VendingMachine.give_change/2" do
+    setup do
+      %{
+        vending_machine: %VendingMachine{
+          inventory: [],
+          bank: %CoinStorage{
+            wallet: [@dime, @nickel, @nickel],
+            tally: %{quarter: 0, dime: 1, nickel: 2},
+            total: 20
+          },
+          coin_return: [],
+          staging: %CoinStorage{
+            wallet: [@quarter, @quarter, @quarter],
+            tally: %{quarter: 3, dime: 0, nickel: 0},
+            total: 75
+          }
+        }
+      }
+    end
+
+    test "If Vending Machine owes user 10c and staging does not have a dime then Vending Machine will transfer dime from bank to coin return",
+         %{vending_machine: vm} do
+      vm = VendingMachine.give_change(vm, 10)
+
+      assert CoinStorage.equal?(vm.bank, %CoinStorage{
+               wallet: [@nickel, @nickel],
+               tally: %{quarter: 0, dime: 0, nickel: 2},
+               total: 10
+             }) == true
+
+      assert vm.coin_return == [@dime]
     end
   end
 end
