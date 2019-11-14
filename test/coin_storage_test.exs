@@ -150,7 +150,7 @@ defmodule CoinStorage.Test do
         total: 40
       }
 
-      coin = CoinStorage.get_highest_not_quarter_coin(coin_storage)
+      coin = CoinStorage.get_highest_non_quarter_coin(coin_storage)
       assert coin == @dime
     end
 
@@ -161,7 +161,7 @@ defmodule CoinStorage.Test do
         total: 30
       }
 
-      coin = CoinStorage.get_highest_not_quarter_coin(coin_storage)
+      coin = CoinStorage.get_highest_non_quarter_coin(coin_storage)
       assert coin == @nickel
     end
 
@@ -172,7 +172,7 @@ defmodule CoinStorage.Test do
         total: 25
       }
 
-      coin = CoinStorage.get_highest_not_quarter_coin(coin_storage)
+      coin = CoinStorage.get_highest_non_quarter_coin(coin_storage)
       assert coin == nil
     end
   end

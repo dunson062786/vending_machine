@@ -61,7 +61,7 @@ defmodule CoinStorage do
       coin_storage_one.total == coin_storage_two.total
   end
 
-  def get_highest_not_quarter_coin(coin_storage) do
+  def get_highest_non_quarter_coin(coin_storage) do
     case coin_storage.tally do
       %{quarter: _, dime: 0, nickel: 0} -> nil
       %{quarter: _, dime: 0, nickel: _} -> Coin.createNickel()
