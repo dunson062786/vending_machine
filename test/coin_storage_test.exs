@@ -2,7 +2,6 @@ defmodule CoinStorage.Test do
   use ExUnit.Case
   doctest CoinStorage
 
-  @invalid %Coin{weight: 2.5, name: :penny}
   @nickel %Coin{weight: 5.0, name: :nickel}
   @dime %Coin{weight: 2.268, name: :dime}
   @quarter %Coin{weight: 5.670, name: :quarter}
@@ -105,6 +104,11 @@ defmodule CoinStorage.Test do
 
       {coin, coin_storage} = CoinStorage.remove_highest_non_quarter_coin(coin_storage)
       assert coin == @dime
+      assert CoinStorage.equal?(coin_storage, %CoinStorage{
+        wallet: [@quarter, @nickel],
+        tally: %{quarter: 1, dime: 0, nickel: 1},
+        total: 30
+      })
     end
   end
 

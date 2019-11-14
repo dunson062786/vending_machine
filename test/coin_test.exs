@@ -1,6 +1,5 @@
 defmodule Coin.Test do
   use ExUnit.Case
-  import Utilities
   doctest Coin
 
   describe "Coin.createQuarter/1" do

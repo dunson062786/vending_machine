@@ -40,7 +40,7 @@ defmodule CoinStorage do
   end
 
   def remove_any(coin_storage) do
-    [hd | tl] = coin_storage.wallet
+    [hd | _tl] = coin_storage.wallet
     get_and_remove_coin(coin_storage, hd)
   end
 

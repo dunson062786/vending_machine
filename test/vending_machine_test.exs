@@ -512,10 +512,29 @@ defmodule VendingMachine.Test do
   end
 
   describe "VendingMachine.return_coins/1" do
-    test "returns quarter if quarter is in staging" do
-      vm = %VendingMachine{staging: [@quarter], coin_return: []}
+    setup do
+      %{
+        vending_machine: %VendingMachine{
+          inventory: [
+            %Product{name: :cola},
+            %Product{name: :chips},
+            %Product{name: :candy}
+          ],
+          bank: %CoinStorage{},
+          coin_return: [],
+          staging: %CoinStorage{
+            wallet: [@quarter],
+            tally: %{quarter: 1, dime: 0, nickel: 0},
+            total: 25
+          }
+        }
+      }
+    end
+
+    test "returns quarter if quarter is in staging", %{vending_machine: vm} do
       vm = VendingMachine.return_coins(vm)
-      assert vm.staging == [] && vm.coin_return == [@quarter]
+      assert CoinStorage.equal?(vm.staging, %CoinStorage{})
+      assert vm.coin_return.wallet == [@quarter]
     end
   end
 

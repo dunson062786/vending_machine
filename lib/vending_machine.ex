@@ -164,7 +164,7 @@ defmodule VendingMachine do
     vending_machine =
       put_in(vending_machine.coin_return, vending_machine.coin_return ++ vending_machine.staging)
 
-    put_in(vending_machine.staging, [])
+    put_in(vending_machine.staging, %CoinStorage{})
   end
 
   def get_price_of_selected(vending_machine) do
