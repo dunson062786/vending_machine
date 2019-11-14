@@ -72,32 +72,19 @@ defmodule VendingMachine do
   end
 
   def process_transaction(vending_machine) do
-    if sold_out(vending_machine) do
-      vending_machine = deselect_everything(vending_machine)
-      put_in(vending_machine.display, "SOLD OUT")
-    else
-      price = get_price_of_selected(vending_machine)
-
-      if vending_machine.staging.total < price do
+    price = get_price_of_selected(vending_machine)
+    amount_owed = vending_machine.staging.total - price
+    cond do
+      sold_out(vending_machine) ->
+        vending_machine = deselect_everything(vending_machine)
+        put_in(vending_machine.display, "SOLD OUT")
+      vending_machine.staging.total < price ->
         put_in(vending_machine.display, "PRICE #{format_for_currency(price)}")
-      else
-        amount_owed = vending_machine.staging.total - price
-
-        if amount_owed == 0 || can_make_change(vending_machine) do
-          product = %Product{name: get_selected(vending_machine)}
-
-          vending_machine =
-            put_in(vending_machine.inventory, vending_machine.inventory -- [product])
-
-          vending_machine = put_in(vending_machine.bin, [product | vending_machine.bin])
-          vending_machine = give_change(vending_machine, amount_owed)
-          vending_machine = move_coins_to_bank(vending_machine)
-          put_in(vending_machine.display, "THANK YOU")
-        else
-          vending_machine = transfer_coins(vending_machine, :staging, :coin_return)
-          put_in(vending_machine.display, "EXACT CHANGE ONLY")
-        end
-      end
+      amount_owed == 0 || can_make_change(vending_machine) ->
+        do_process(vending_machine, amount_owed)
+      true ->
+        vending_machine = transfer_coins(vending_machine, :staging, :coin_return)
+        put_in(vending_machine.display, "EXACT CHANGE ONLY")
     end
   end
 
@@ -130,7 +117,7 @@ defmodule VendingMachine do
   def give_change(vending_machine, amount_owed) do
     cond do
       amount_owed >= 25 ->
-        {coin, rest} = CoinStorage.remove_any(vending_machine.staging)
+        {coin, _rest} = CoinStorage.remove_any(vending_machine.staging)
         vending_machine = transfer_coin(vending_machine, :staging, :coin_return, coin)
         give_change(vending_machine, amount_owed - get_value_of_coin(coin))
 
@@ -140,7 +127,7 @@ defmodule VendingMachine do
         give_change(vending_machine, amount_owed - get_value_of_coin(coin))
 
       amount_owed >= 5 ->
-        vending_machine = transfer_coin(vending_machine, :bank, :coin_return, Coin.createNickel())
+        transfer_coin(vending_machine, :bank, :coin_return, Coin.createNickel())
 
       true ->
         vending_machine
@@ -219,6 +206,18 @@ defmodule VendingMachine do
     else
       {put_in(vending_machine.display, "EXACT CHANGE ONLY"), (vending_machine.display || "EXACT CHANGE ONLY")}
     end
+  end
+
+  def do_process(vending_machine, amount_owed) do
+    product = %Product{name: get_selected(vending_machine)}
+
+    vending_machine =
+      put_in(vending_machine.inventory, vending_machine.inventory -- [product])
+
+    vending_machine = put_in(vending_machine.bin, [product | vending_machine.bin])
+    vending_machine = give_change(vending_machine, amount_owed)
+    vending_machine = move_coins_to_bank(vending_machine)
+    put_in(vending_machine.display, "THANK YOU")
   end
 
 end
