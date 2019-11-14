@@ -94,10 +94,7 @@ defmodule VendingMachine do
           vending_machine = move_coins_to_bank(vending_machine)
           put_in(vending_machine.display, "THANK YOU")
         else
-          # return coins and display "EXACT CHANGE ONLY"
-          {coins, coin_storage} = CoinStorage.remove_coins(vending_machine.staging)
-          vending_machine = put_in(vending_machine.coin_return, vending_machine.coin_return ++ coins)
-          vending_machine = put_in(vending_machine.staging, coin_storage)
+          vending_machine = transfer_coins(vending_machine, :staging, :coin_return)
           put_in(vending_machine.display, "EXACT CHANGE ONLY")
         end
       end
@@ -134,16 +131,16 @@ defmodule VendingMachine do
     cond do
       amount_owed >= 25 ->
         {coin, rest} = CoinStorage.remove_any(vending_machine.staging)
-        vending_machine = transfer(vending_machine, :staging, :coin_return, coin)
+        vending_machine = transfer_coin(vending_machine, :staging, :coin_return, coin)
         give_change(vending_machine, amount_owed - get_value_of_coin(coin))
 
       amount_owed >= 10 ->
         coin = CoinStorage.get_highest_non_quarter_coin(vending_machine.bank)
-        vending_machine = transfer(vending_machine, :bank, :coin_return, coin)
+        vending_machine = transfer_coin(vending_machine, :bank, :coin_return, coin)
         give_change(vending_machine, amount_owed - get_value_of_coin(coin))
 
       amount_owed >= 5 ->
-        vending_machine = transfer(vending_machine, :bank, :coin_return, Coin.createNickel())
+        vending_machine = transfer_coin(vending_machine, :bank, :coin_return, Coin.createNickel())
 
       true ->
         vending_machine
@@ -187,7 +184,17 @@ defmodule VendingMachine do
     get_in(vending_machine, [Access.key(:ledger), Access.key(get_selected(vending_machine))])
   end
 
-  def transfer(vending_machine, from, to, coin) do
+  def transfer_coins(vending_machine, from, to) do
+    {coins, coin_storage} = CoinStorage.remove_coins(get_in(vending_machine, [Access.key(from)]))
+    vending_machine = if to == :coin_return do
+      put_in(vending_machine.coin_return, vending_machine.coin_return ++ coins)
+    else
+      put_in(vending_machine, [Access.key(to)], coins)
+    end
+    put_in(vending_machine, [Access.key(from)], coin_storage)
+  end
+
+  def transfer_coin(vending_machine, from, to, coin) do
     vending_machine =
       put_in(
         vending_machine,

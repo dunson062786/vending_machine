@@ -774,7 +774,7 @@ defmodule VendingMachine.Test do
 
     test "If vending machine transfers dime from bank to coin_return then bank will have 10c less and coin_return will have 10c more",
          %{vending_machine: vm} do
-      vm = VendingMachine.transfer(vm, :bank, :coin_return, Coin.createDime())
+      vm = VendingMachine.transfer_coin(vm, :bank, :coin_return, Coin.createDime())
 
       assert CoinStorage.equal?(vm.bank, %CoinStorage{
                wallet: [@nickel, @nickel],
